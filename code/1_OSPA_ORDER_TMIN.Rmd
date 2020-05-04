@@ -35,13 +35,13 @@ library(dplyr)
 
 # SELECIONAR EL DIRECTORIO DE TRABAJO
 ```{r, include=FALSE, message=FALSE}
-dir.principal<- "C:/Users/User/projects/SEQUIA/"
-ruta.datos<- paste(dir.principal, "tmins/tablas/", sep="")
+dir.principal<- "C:/Users/User/projects/4.frost/"
+ruta.datos<- paste(dir.principal, "Data", sep="")
 setwd(ruta.datos)
 ```
 
 ```{r}
-ospa <- read.csv("C:/Users/User/projects/SEQUIA/tmins/tablas/SEGUIMIENTO_TMIN_2015.csv", header = TRUE, sep = ",")
+ospa <- read.csv("C:/Users/User/projects/4.frost/Data/TABLAS_ORIGINALES//SEGUIMIENTO_TMIN_2015.csv", header = TRUE, sep = ",")
 
 #FECHA = seq(as.Date("2019-01-01"), by="day", length=365)
 FECHA = data.frame(seq(as.Date("2015-01-01"), by="day",length=365))
