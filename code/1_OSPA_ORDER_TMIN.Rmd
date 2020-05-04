@@ -1,0 +1,435 @@
+---
+title: "OSPA"
+author: "Camilo Pérez"
+date: "28 de febrero de 2019"
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE, message=FALSE}
+library(readxl)
+library(rlang)
+library(tidyverse)
+library(lubridate) # manipulacion de fechas
+library (sp)
+library(rgdal) 
+library (raster) # para el comando click?
+library(tmap)
+library(leaflet) # libreria mapas
+library(rgeos)
+library(dismo)
+library(RColorBrewer)
+library(adehabitatHR)
+library(tmaptools)
+library(gstat)
+library(adehabitatLT)
+library(xts)
+library(spatstat)
+library(spData)
+library(classInt)
+library(ggthemes)
+library(tidyr)
+library(dplyr)
+```
+
+# SELECIONAR EL DIRECTORIO DE TRABAJO
+```{r, include=FALSE, message=FALSE}
+dir.principal<- "C:/Users/User/projects/SEQUIA/"
+ruta.datos<- paste(dir.principal, "tmins/tablas/", sep="")
+setwd(ruta.datos)
+```
+
+```{r}
+ospa <- read.csv("C:/Users/User/projects/SEQUIA/tmins/tablas/SEGUIMIENTO_TMIN_2015.csv", header = TRUE, sep = ",")
+
+#FECHA = seq(as.Date("2019-01-01"), by="day", length=365)
+FECHA = data.frame(seq(as.Date("2015-01-01"), by="day",length=365))
+nrow(FECHA)
+
+NOMBRES = names(ospa)
+CODIGO = ospa$CODIGO
+LATITUD = ospa$LATITUD
+LONGITUD = ospa$LONGITUD
+ELEVACION= ospa$ELEVACION
+ESTACIONES = ospa$ESTACION
+MUNICIPIO = ospa$MUNICIPIO
+DEPARTAMENTO = ospa$DEPARTAMENTO
+
+
+
+DATA = t(ospa[1,c(8:ncol(ospa))])
+DATA <- data.frame(DATA)
+X = c(1:nrow(FECHA)); A = NULL; B = NULL
+
+for(i in X){
+  
+MUL_ESTACIONES = as.character(rep(ESTACIONES[i], nrow(FECHA)));
+MUL_MUNICIPIOS = as.character(rep(MUNICIPIO[i], nrow(FECHA)));
+MUL_DEPARTAMENTOS = as.character(rep(DEPARTAMENTO[i], nrow(FECHA)));
+MUL_CODIGO = as.character(rep(CODIGO[i], nrow(FECHA)));
+MUL_LATITUD = as.character(rep(LATITUD[i], nrow(FECHA)));
+MUL_LONGITUD = as.character(rep(LONGITUD[i], nrow(FECHA)));
+MUL_ELEVACION = as.character(rep(ELEVACION[i], nrow(FECHA)));
+ARREGLO_OSPA_i = cbind(FECHA,MUL_CODIGO,MUL_LATITUD, MUL_LONGITUD,MUL_ELEVACION, MUL_ESTACIONES, MUL_MUNICIPIOS, MUL_DEPARTAMENTOS, DATA = t(ospa[i,c(8:ncol(ospa))])  );  names(ARREGLO_OSPA_i) = c("FECHA","CODIGO","LATITUD","LONGITUD","ELEVACION", "ESTACION","MUNICIPIO","DEPARTAMENTO","DATO");
+ A<- data.frame(ARREGLO_OSPA_i); B = rbind(B, A); 
+}
+names(B) = c("FECHA","CODIGO","LATITUD","LONGITUD","ELEVACION", "ESTACION","MUNICIPIO","DEPARTAMENTO","DATO")
+#B$FECHA <- as.Date(B$FECHA, format = "%d%m%y")
+
+
+View(B)
+
+write.csv(B, file = "2015_TMIN.csv")
+
+```
+
+```{r}
+
+library(ggplot2)
+library(tidyverse)
+library(RColorBrewer)
+
+DICIEMBRE = data.frame(seq(as.Date("2019-12-01"), by="day", length=21))
+
+BOGOTA <- B %>% filter(!is.na(DATO)) %>% filter(DEPARTAMENTO == "CUNDINAMARCA" & ELEVACION >=1000)# %>% filter(FECHA$ %in% DICIEMBRE) 
+
+
+ggplot(data = BOGOTA, aes(FECHA, ESTACION, fill = DATO))+
+  geom_tile(color = "grey50", trans = "sqrt")+
+  #scale_x_continuous(expand = c(0,0))+
+  scale_fill_gradientn(colors = brewer.pal(20, "Blues"))+
+  #geom_vline(xintercept = 1963, col= "blue")+
+  theme_minimal()+ theme(panel.grid = element_blank())+
+  ggtitle("LLUVIA DIARIA EN BOGOTÁ")+
+  xlab("Fecha")+
+  ylab("Estaciones")
+```
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(dslabs)
+library(RColorBrewer)
+
+
+avg <- B %>% group_by(FECHA) %>% summarize(average = mean(DATO))
+
+
+B %>% ggplot() +
+geom_line(aes(FECHA, DATO, group = ESTACION), color = "grey50", show.legend = FALSE, alpha = 0.5, size = 1) + geom_line(aes(FECHA, average ), data = avg, size = 1, color = "black") 
+
+
+```
+
+
+```{r}
+
+```
+
+
+# cargar los datos, dar nombres y limpiar NA
+```{r, include=FALSE, message=FALSE}
+
+
+#ospa = read_xlsx(path = "C:/Users/User/projects/ospa/data/SEGUIMIENTO_PREC_2019.xlsx", sheet = "SEGUIMIENTO_PREC_2019")
+
+View(ospa)
+names(ospa)<- c("CODIGO","LONGITUD","LATITUD","ELEVACION","ESTACION","MUNICIPIO","DEPARTAMENTO",1:(ncol(ospa)-7))
+dim(ospa)
+
+# nueva columna con la suma de datos faltantes
+dat_90 = ncol(ospa) - round((ncol(ospa)-7)*90/100,0)
+dat_90
+ospa<- ospa %>% mutate(Faltantes = rowSums(is.na(ospa))) %>% filter(Faltantes <= dat_90)
+nrow(ospa)
+ospa<- ospa%>% mutate(Total= rowSums (ospa[ , 8:(ncol(ospa)-7)], na.rm = TRUE))
+dim(ospa)
+ospa<- ospa %>% arrange(desc(Total))
+
+head(ospa,5)
+
+View(ospa)
+
+#dim(ospa) # numero de filas y numero de columnas
+#glimpse(ospa)#nos permite exploarar las variables. Nos dice, al lado de cada variable cu?l es el tipo. 
+
+#sapply(ospa, function(x) sum(is.na(x))) # sumar el numero de NA por columnas 
+
+```
+
+# HISTOGRAMA Y DENSIDAD DE PRECIPITACION
+```{r}
+
+library(gridExtra)
+p <- ospa %>% ggplot(aes(x=Total)) 
+p1 <- p + geom_histogram(binwidth = 20, fill = "blue", col = "black",alpha=0.2)+
+  ggtitle("HISTOGRAM")+ 
+  xlab("PRECIPITACION MENSUAL TOTAL [mm] ")
+
+p2 <- p + geom_density(binwidth = 20, fill = "blue", col = "black",alpha=0.2)+
+  ggtitle("DENSITY")+
+  xlab("PRECIPITACION MENSUAL TOTAL [mm] ")
+
+
+grid.arrange(p1,p2, ncol =2)
+
+```
+# summarizing data whit dplyr
+
+```{r}
+s <- ospa %>% summarize (median = median(Total),
+             average = mean(Total), 
+             standard_deviation= sd(Total),
+             minimun = min(Total),
+             maximun = max(Total)
+             )
+s
+
+
+```
+
+```{r}
+d<- ospa %>% group_by(DEPARTAMENTO) %>% 
+  summarize (average = mean(Total), standard_desviation = sd(Total), maximun = max(Total), minimun = min(Total)) %>% arrange(desc(average))
+dim(d)
+View(d)
+
+```
+
+   
+# QUE PROPORCION DE LOS DATOS ENTRAN ENTRE UN RANGO DE PRECIPITACION
+```{r, warning=FALSE}
+
+intervalo<- which(ospa$Total>0 & ospa$Total<=2000)
+solution_1<- (length(intervalo)/length(ospa$Total))*100
+solution_1
+```
+##SECOND SOLUTION: QUE PROPORCION DE LOS DATOS ENTRAN ENTRE UN RANGO DE PRECIPITACION
+```{r, warning=FALSE}
+avg <- mean(PPT_TOTAL)
+stdev <- sd(PPT_TOTAL)
+```
+
+###ESTANDARIZAMOS LOS DATOS (unidades estandar)
+```{r, warning=FALSE}
+
+z<- scale(PPT_TOTAL)
+Gz1<- (300-avg)/stdev
+Gz1
+Gz2<-  (900-avg)/stdev
+Gz2
+solution_2<- mean(abs(z)<=Gz2 & (z)>Gz1)
+solution_2*100
+```
+Suppose you only have avg and stdev below, but no access to x,and you approximate the proportion of the data that is between 69 and 72 inches?
+
+
+```{r, warning=FALSE}
+p1<- pnorm(900, mean = avg, sd = stdev, lower.tail = TRUE)
+p2<- pnorm(300, mean = avg, sd = stdev, lower.tail = TRUE)
+solution_3<- p1-p2
+solution_3
+
+```
+
+##To obtain the quantiles for the data, we can use the quantile function "quantile"
+```{r, warning=FALSE}
+p<- seq(0.05,0.95,0.05)
+observed_quantiles<- quantile(total,p)
+observed_quantiles
+
+```
+
+#falta por completar
+```{r}
+x<- 9:34
+
+
+d_1 <- quantile(ospa$`1`, p)
+d_2 <- quantile(ospa$`2`, p)
+d_3 <- quantile(ospa$`3`, p)
+
+di <- data.frame(c(1:length(p)), d_1,d_2,d_3)
+names(di)<- c("pst",1:3)
+di
+
+
+
+```
+
+```{r}
+re_caribe <- c("MAGDALENA", "SAN ANDRES PROVIDENCIA Y STA C", "BOLIVAR", "ATLANTICO", "CESAR", "LA GUAJIRA", "SUCRE", "CORDOBA")
+```
+
+# definicion de fechas
+```{r}
+
+#ayer <- day(today())-1
+#ayer
+#dia<- paste0(" ",ayer," ")
+#dia
+dias <- as.anylist(dia)
+ospa_3 <- ospa[,c(7,8,9:(8 + ayer))]
+View(ospa_3)
+View(t(ospa_3))
+
+#View(t_ospa<- data.frame(t(ospa_3)))
+```
+
+# GRAFICO REGION CARIBE
+```{r}
+
+re_caribe <- c("MAGDALENA", "SAN ANDRES PROVIDENCIA Y STA C", "BOLIVAR", "ATLANTICO", "CESAR", "LA GUAJIRA", "SUCRE", "CORDOBA")
+
+CARIBE <- ospa %>% filter(DEPARTAMENTO %in% re_caribe & !is.na(`3`)) %>%
+ggplot(aes(DEPARTAMENTO, `3`, color = DEPARTAMENTO)) +
+geom_point()  +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))+ ggtitle("BOXPLOT REGIÓN CARIBE")+
+xlab("")
+
+
+CARIBE
+
+
+```
+#BOXPLOT REGIÓN ANDINA
+
+```{r}
+
+re_andina <- c("SANTANDER","ANTIOQUIA","BOYACA","CUNDINAMARCA","CALDAS","RISARALDA","TOLIMA","BOGOTA DC","QUINDIO","NORTE DE SANTANDER","HUILA")
+
+
+ANDINA <- ospa %>% filter(DEPARTAMENTO %in% re_andina & !is.na(`3`)) %>% 
+mutate(DEP= reorder(DEPARTAMENTO,  `3`, FUN = max))%>%
+ggplot(aes(DEP,  `3`, fill = DEPARTAMENTO)) +
+geom_boxplot()+
+scale_y_continuous(trans = "log2")+
+theme(axis.text.x = element_text(angle = 90, hjust = 1))+ ggtitle("BOXPLOT REGIÓN ANDINA")+
+xlab("")
+
+ANDINA
+
+
+```
+# BOXPLOT REGIÓN CARIBE
+
+```{r}
+
+
+CARIBE_BOX <- ospa_3 %>% filter(DEPARTAMENTO %in% re_caribe & !is.na(`3`)) %>% 
+mutate(DEP= reorder(DEPARTAMENTO,  `3`, FUN = min)) %>%
+ggplot(aes(DEP, `3`, fill = DEPARTAMENTO)) +
+geom_boxplot()+
+scale_y_continuous(trans = "log2")+
+theme(axis.text.x = element_text(angle = 90, hjust = 1))+ ggtitle("BOXPLOT REGIÓN CARIBE")+
+xlab("")
+
+CARIBE_BOX 
+```
+
+# BOXPLOT REGIÓN PACÍFICA
+
+```{r}
+
+re_pacifica <- c("CHOCO","VALLE DEL CAUCA","CAUCA","NARIÑO")
+
+
+PACIFICA_BOX <- ospa_3 %>% filter(DEPARTAMENTO %in% re_pacifica & !is.na(`3`)) %>% 
+mutate(DEP= reorder(DEPARTAMENTO,  `3`, FUN = max)) %>%
+ggplot(aes(DEP,  `3`, fill = DEPARTAMENTO)) +
+geom_boxplot()+
+scale_y_continuous(trans = "log2")+
+theme(axis.text.x = element_text(angle = 90, hjust = 1))+ ggtitle("BOXPLOT REGIÓN PACÍFICA")+
+xlab("")
+
+PACIFICA_BOX
+```
+
+
+```{r}
+re_orinoquia <- c("ARAUCA","CASANARE","META","VICHADA")
+
+
+ORINOQUIA_BOX <- ospa_3 %>% filter(DEPARTAMENTO %in% re_orinoquia & !is.na(`3`)) %>% 
+mutate(DEP= reorder(DEPARTAMENTO,  `3`, FUN = median)) %>%
+ggplot(aes(DEP,  `3`, fill = DEPARTAMENTO)) +
+geom_boxplot()+
+scale_y_continuous(trans = "log2")+
+theme(axis.text.x = element_text(angle = 90, hjust = 1))+ ggtitle("BOXPLOT REGIÓN ORINOQUÍA")+
+xlab("")
+
+ORINOQUIA_BOX
+```
+```{r}
+re_amazonica <- c("CAQUETA","PUTUmayo","GUAVIARE","AMAZONAS","GUAVIARE","VAUPES","GUAINIA")
+
+
+AMAZONAS_BOX <- ospa_3 %>% filter(DEPARTAMENTO %in% re_amazonica & !is.na( `3`)) %>% 
+mutate(DEP= reorder(DEPARTAMENTO,  `3`, FUN = median)) %>%
+ggplot(aes(DEP,  `3`, fill = DEPARTAMENTO)) +
+geom_boxplot()+
+scale_y_continuous(trans = "log2")+
+theme(axis.text.x = element_text(angle = 90, hjust = 1))+ ggtitle("BOXPLOT REGION AMAZONICA")+
+xlab("")
+AMAZONAS_BOX 
+```
+
+# mapas
+```{r, include=TRUE, message=FALSE, warning=FALSE}
+
+SP_DEPARTAMENTOS_COLOMBIA <- readOGR( "C:/Users/User/projects/ospa/shape", "WGS_1984_DEPTO")
+
+#PROYECCION DE DATOS EN 
+ESTACIONES_SP<- ospa_2
+coordinates(ESTACIONES_SP) <- ~ LON + LAT
+proj4string(ESTACIONES_SP)<-proj4string(SP_DEPARTAMENTOS_COLOMBIA)
+
+
+# turns view map on
+tmap_mode("view")
+tm_shape(ESTACIONES_SP) + 
+tm_dots(title = "PRECIPITACION (mm)", border.col = "black", border.lwd = 0.1, border.alpha = 0.2, col = " 1", style = "fixed", breaks = c(0,0.1,10,20,30,40,50,60,80,90, Inf), palette= rainbow(10))
+
+```
+
+# GRAFICO BOGOTA
+
+```{r, include=FALSE}
+library(ggplot2)
+BOGOTA <- ospa_2[ospa_2$MUNICIPIO == "Bogotá DC", ]
+D<- day(today())+8
+BOGOTA <- BOGOTA[,c(1:8,D)]
+names(BOGOTA)<- c("LON","LAT","ELEV","COD1","COD2","ESTACION","MUNICIPIO","DEPARTAMENTO","PRECIPITACION")
+BOGOTA <- BOGOTA[!is.na(BOGOTA$PRECIPITACION),]
+```
+
+```{r,  message=TRUE, include=TRUE, warning=FALSE}
+
+#BOGOTA %>% ggplot()+ 
+#geom_point(aes(x=ESTACION, y=PRECIPITACION, size = 3, col= ESTACION)) + 
+#geom_text(aes(x=ESTACION, y=PRECIPITACION, label =PRECIPITACION, label.size = 1), nudge_y = 0.04)+ 
+#ggtitle("PRECIPITACION DIARIA BOGOTA", today() -1)+
+#theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+
+```{r, include=TRUE, warning=FALSE}
+#PROYECCION DE DATOS EN 
+#BOGOTA_SP<- BOGOTA
+#coordinates(BOGOTA_SP) <- ~ LON + LAT
+#proj4string(BOGOTA_SP)<-proj4string(SP_DEPARTAMENTOS_COLOMBIA)
+
+
+# turns view map on
+#tmap_mode("view")
+#tm_shape(BOGOTA_SP) +   
+#tm_bubbles(size = "PRECIPITACION", col = "PRECIPITACION", palette = "Blues", style = "quantile",legend.size.show = TRUE, #title.col = "PRECIPITACION (mm)" ) +
+#tm_layout(title = "PRECIPITACION DIARIA BOGOTA DC", legend.text.size = 0.5, legend.title.size = 1.0, frame = FALSE) +
+#tm_minimap()
+
+#tm_dots(title = c("PRECIPITACION (mm)", today()-1), border.col = "black", border.lwd = 0.1, border.alpha = 0.2, col = "PRECIPITACION", style = "fixed", breaks = c(0,0.1,0.3,0.5,1,2,5,10,20,30,40,50, Inf), palette= rainbow(15))
+
+```
+
